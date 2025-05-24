@@ -1,0 +1,31 @@
+## Classe : CHttpClient
+
+## Envoie
+PROCÉDURE PUBLIQUE GLOBALE Envoie(sUrl est une chaîne, stHttpClientOption est STHttpOption = Null) : httpRéponse
+
+wxFirebaseRequête	est une httpRequête
+wxFirebaseRéponse	est une httpRéponse
+
+SI stHttpClientOption.eMethode DANS (eHTTPGet,Null) ALORS
+	stHttpClientOption.eMethode		= eHTTPGet
+	stHttpClientOption.bufContenu	= ""
+FIN
+
+wxFirebaseRequête.URL			= URLEncode(sUrl)
+wxFirebaseRequête.Méthode		= stHttpClientOption.eMethode // stHttpClientOption.bufContenu   = "" ? httpGet    sinon stHttpClientOption.eMethode..Valeur
+wxFirebaseRequête.ContentType	= stHttpClientOption.sContentType  DANS ("",Null) ? typeMimeJSON SINON stHttpClientOption.sContentType
+wxFirebaseRequête.Contenu		= stHttpClientOption.bufContenu DANS ("",Null) ? "" SINON stHttpClientOption.bufContenu
+
+SI stHttpClientOption.taEntête..Occurrence <> 0 ALORS
+	POUR TOUT ÉLÉMENT sEntêteValeur, sEntêteClé DE stHttpClientOption.taEntête
+		wxFirebaseRequête.Entête[sEntêteClé] = sEntêteValeur
+	FIN
+FIN
+
+wxFirebaseRéponse = wxFirebaseRequête.Envoie()
+
+RENVOYER wxFirebaseRéponse
+
+CAS ERREUR:
+	ErreurPropage()
+	RENVOYER wxFirebaseRéponse

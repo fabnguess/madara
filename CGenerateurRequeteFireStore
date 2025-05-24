@@ -1,0 +1,196 @@
+## Déclaration
+STFrom est une Structure
+	collectionId est une chaîne
+FIN
+
+STSelect est une Structure
+	fields est un tableau de STFieldPath
+FIN
+
+STFieldFilter_Str est une Structure
+	field	est un STFieldPath
+	op		est une chaîne
+	value	est un STStringValue
+FIN
+
+STFilters_Str est une Structure
+	fieldFilter est un STFieldFilter_Str
+FIN
+
+STCompositeFilter est une Structure
+	filters	est un tableau de JSON
+	op		est une chaîne
+FIN
+
+stSimpleFilter est une Structure
+	fieldFilter	est un tableau de JSON
+	op			est une chaîne
+FIN
+
+STWhereComposite est une Structure
+	compositeFilter est un JSON
+FIN
+
+STWhere est une Structure
+	fieldFilter est un JSON
+FIN
+
+STOrderBy est une Structure
+	field		est un STFieldPath
+	direction	est une chaîne
+FIN
+
+STTri est une Structure
+	sChamp		est une chaîne
+	eDirection	est une EDirectionTriFirestore
+FIN
+
+STFiltre est une Structure
+	sChamp		est une chaîne
+	eOperateur	est une EOperateurFirestore
+	sValeur		est une chaîne
+FIN
+
+CGenerateurRequeteFireStore est une Classe
+PRIVÉ
+	m_tabListeChampsSelect	est un tableau de chaînes
+	m_tabListeChampsTrier	est un tableau de STTri
+	m_tabListeDesFiltres	est un tableau de STFiltre
+	m_nValeurLimite			est un entier
+	m_sUrl					est une string
+	m_stHttpOption			est STHttpOption
+	m_HttpClientReponse		est un restRéponse
+FIN
+
+## TrierPar
+PROCÉDURE TrierPar(sChamp est une chaîne, eDirection est EDirectionTriFirestore) :CGenerateurRequeteFireStore
+
+::m_tabListeChampsTrier.Ajoute([sChamp, eDirection])
+
+RENVOYER objet
+
+## Filtrer
+PROCÉDURE Filtrer(sChamp est une chaîne, eOp est EOperateurFirestore, sValeur est une chaîne) :CGenerateurRequeteFireStore
+
+::m_tabListeDesFiltres.Ajoute([sChamp, eOp, sValeur])
+
+RENVOYER objet
+
+## Limiter
+PROCÉDURE Limiter(nValeurDeLaLimite est un entier) :CGenerateurRequeteFireStore
+
+::m_nValeurLimite = nValeurDeLaLimite
+
+RENVOYER objet
+
+## Executer
+PROCÉDURE Executer() : CFireStoreReponse
+
+m_stHttpOption.taEntête["Authorization"]	= "Bearer "+CAuth.ExposeToken
+
+m_HttpClientReponse							= CHttpClient.Envoie(m_sUrl, :m_stHttpOption)
+
+SI ErreurDétectée() _OU_ m_HttpClientReponse.CodeEtat <> 200 ALORS
+	RENVOYER  new CFireStoreReponse(m_HttpClientReponse, ErreurInfo(errMessage))
+FIN
+
+RENVOYER new CFireStoreReponse(m_HttpClientReponse)
+
+## _ConstruireRequete
+PROCÉDURE _ConstruireRequete(_sCollName	est une chaîne,_jPay est un JSON <utile> = Null) : JSON
+
+SI _sCollName DANS ("",Null) ALORS RENVOYER Null
+
+jPayload			est un JSON
+
+stFrom				est une STFrom
+bufFrom				est un Buffer
+taForm				est un tableau de JSON
+
+stSelect			est un STSelect
+jSelect				est un JSON
+bufSelect			est un Buffer
+
+jWhere				est un JSON
+bufWhere			est un Buffer
+
+stOrderBy			est une STOrderBy
+stField				est un STFieldPath
+
+bufOrder			est un Buffer
+
+# From
+stFrom.collectionId = _sCollName
+Sérialise(stFrom,bufFrom,psdJSON)
+taForm.AjouteLigne(bufFrom)
+jPayload.structuredQuery.from	= taForm
+
+# Select
+SI ::m_tabListeChampsSelect..Occurrence>0 ALORS
+	
+	POUR TOUT chmp DE ::m_tabListeChampsSelect
+		stField.fieldPath = chmp
+		stSelect.fields.AjouteLigne(stField)
+	FIN
+	
+	Sérialise(stSelect,bufSelect,psdJSON)
+	
+	jSelect							= bufSelect
+	jPayload.structuredQuery.select	= jSelect
+FIN
+
+# Where
+SI ::m_tabListeDesFiltres..Occurrence>0 ALORS
+	
+	jFilter			est un Buffer
+	TaFilters		est un tableau de JSON
+	stFilters_Str	est un STFilters_Str
+	
+	POUR TOUT m DE ::m_tabListeDesFiltres
+		stFilters_Str.fieldFilter.field.fieldPath	= m.sChamp
+		stFilters_Str.fieldFilter.op				= m.eOperateur
+		stFilters_Str.fieldFilter.value.stringValue	= m.sValeur
+		Sérialise(stFilters_Str,jFilter,psdJSON)
+		TaFilters.AjouteLigne(jFilter)
+	FIN
+	
+	Sérialise(TaFilters,bufWhere,psdJSON)
+	jWhere													= bufWhere
+	jPayload.structuredQuery.where.compositeFilter.filters	= jWhere
+	jPayload.structuredQuery.where.compositeFilter.op		= "OR"
+FIN
+
+# Order
+SI ::m_tabListeChampsTrier..Occurrence>0 ALORS
+	taOrderby est un tableau de JSON
+	POUR TOUT m DE ::m_tabListeChampsTrier
+		
+		stOrderBy.field.fieldPath				= m.sChamp
+		stOrderBy.direction						= m.eDirection.Valeur
+		
+		Sérialise(stOrderBy,bufOrder,psdJSON)
+		
+		taOrderby.AjouteLigne(bufOrder)
+	FIN
+	jPayload.structuredQuery.orderBy = taOrderby
+FIN
+
+# Limit
+SI ::m_nValeurLimite>0 ALORS
+	jPayload.structuredQuery.limit = ::m_nValeurLimite
+FIN
+
+// Init les variables
+::m_tabListeChampsSelect.SupprimeTout()
+::m_tabListeChampsTrier.SupprimeTout()
+::m_tabListeDesFiltres.SupprimeTout()
+::m_nValeurLimite = 0
+
+RENVOYER jPayload
+
+## Selectionner
+PROCÉDURE Selectionner(_sField est une chaîne) : CGenerateurRequeteFireStore
+
+::m_tabListeChampsSelect.Ajoute(_sField)
+
+RENVOYER objet

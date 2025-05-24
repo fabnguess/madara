@@ -1,6 +1,6 @@
-# madara
-# Classe : CFireStoreReponse
-# Traitement : Constructeur
+## Classe : CFireStoreReponse
+
+## Constructeur
 PROCÉDURE Constructeur(ohttpRéponse est un httpRéponse = Null, sExceptionMessage est une chaîne = "")
 
 SI ohttpRéponse = Null ALORS RETOUR

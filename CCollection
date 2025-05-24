@@ -1,0 +1,214 @@
+## Déclaration
+CCollection est une Classe
+	hérite de CGenerateurRequeteFireStore
+PRIVÉ
+	m_sUrl					est une chaîne
+	m_sCollectionID			est une chaîne
+	m_stHttpOption			est STHttpOption
+	jsonDonneesConstruites	est un JSON
+	m_HttpClientReponse		est un restRéponse
+FIN
+
+## Constructeur
+PROCÉDURE Constructeur(sUrl est une chaîne)
+
+Constructeur CGenerateurRequeteFireStore()
+
+m_sCollectionID	= ExtraitChaîne(sUrl, rangDernier, "/")
+
+m_sUrl			= sUrl
+
+
+## Afficher
+PROCÉDURE Afficher(sDocumentID est une chaîne <utile> = ""):CFireStoreReponse
+
+m_sUrl+= ["/"]+"[%sDocumentID%]"
+
+m_stHttpOption.eMethode						= eHTTPGet
+m_stHttpOption.taEntête["Authorization"]	= "Bearer "+CAuth.ExposeToken
+m_stHttpOption.bufContenu					= ""
+
+m_HttpClientReponse							= CHttpClient.Envoie(m_sUrl, m_stHttpOption)
+
+SI ErreurDétectée() _OU_ m_HttpClientReponse.CodeEtat <> 200 ALORS
+	RENVOYER  new CFireStoreReponse(m_HttpClientReponse, ErreurInfo(errMessage))
+FIN
+
+RENVOYER new CFireStoreReponse(m_HttpClientReponse)
+
+## Créer
+PROCÉDURE Creer(LOCAL JsonDonnees est JSON, LOCAL sNomNoeudEnfant est chaîne = "") :CFireStoreReponse
+
+m_stHttpOption.eMethode						= eHTTPPost
+m_stHttpOption.taEntête["Authorization"]	= "Bearer "+CAuth.ExposeToken
+m_stHttpOption.bufContenu					= _GénèreDocumentFirestore(JsonDonnees,sNomNoeudEnfant)
+
+m_HttpClientReponse							= CHttpClient.Envoie(m_sUrl, m_stHttpOption)
+
+SI ErreurDétectée() _OU_ m_HttpClientReponse.CodeEtat <> 200 ALORS
+	RENVOYER  new CFireStoreReponse(m_HttpClientReponse, ErreurInfo(errMessage))
+FIN
+
+RENVOYER new CFireStoreReponse(m_HttpClientReponse)
+
+## Modifier
+PROCÉDURE Modifier(LOCAL sDocumentID est une chaîne, LOCAL jContent est JSON, LOCAL sNomNoeudEnfant est chaîne,stQueryParams est une STUpdQueryParams):CFireStoreReponse
+
+SI PAS (jContent..Type = wlVariantObjet) ALORS RENVOYER  new CFireStoreReponse(m_HttpClientReponse, ErreurInfo(errMessage))
+
+// Masks
+sUpdateMask			est une chaîne	= ""
+sMask				est une chaîne	= ""
+sFilters			est une chaîne	= ""
+sFields				est une chaîne	= ""
+taFields			est un tableau de chaîne
+
+// Vérifier qu'on un masque à formater
+sFields = stQueryParams.mask
+
+SI sFields DANS ("",Null) ALORS
+	POUR TOUT field DE jContent..Membre
+		sUpdateMask	= sUpdateMask+ ["&"]+"updateMask.fieldPaths=[%field..Nom%]"
+		sMask		= sMask+ ["&"]+"mask.fieldPaths=[%field..Nom%]"
+	FIN
+SINON
+	sFields.VersTableau(taFields,",")
+	POUR TOUT Rub DE taFields
+		sUpdateMask	= sUpdateMask+ ["&"]+"updateMask.fieldPaths=[%Rub%]"
+		sMask		= sMask+ ["&"]+"mask.fieldPaths=[%Rub%]"
+	FIN
+FIN
+
+sFilters = sFilters+(sUpdateMask <> "" ? "?"+sUpdateMask SINON "")
+
+SI sMask <> "" ALORS
+	sFilters = sFilters+(sUpdateMask <> "" ? "&"+sMask SINON "?"+sMask)
+FIN
+
+m_sUrl+= ["/"]+"[%sDocumentID%]"+"[%sFilters%]"
+
+m_stHttpOption.eMethode						= eHTTPPatch
+m_stHttpOption.bufContenu					= _GénèreDocumentFirestore(jContent,sNomNoeudEnfant)
+m_stHttpOption.taEntête["Authorization"]	= "Bearer "+CAuth.ExposeToken
+
+m_HttpClientReponse							= CHttpClient.Envoie(m_sUrl, m_stHttpOption)
+
+SI ErreurDétectée() _OU_ m_HttpClientReponse.CodeEtat <> 200 ALORS
+	RENVOYER  new CFireStoreReponse(m_HttpClientReponse, ErreurInfo(errMessage))
+FIN
+
+RENVOYER new CFireStoreReponse(m_HttpClientReponse)
+
+## Supprimer
+PROCÉDURE Supprimer(sDocumentID est une chaîne) : CFireStoreReponse
+
+m_sUrl+= ["/"]+"[%sDocumentID%]"
+
+VariableRAZ(m_stHttpOption)
+
+m_stHttpOption.eMethode						= eHTTPDelete
+m_stHttpOption.taEntête["Authorization"]	= "Bearer "+CAuth.ExposeToken
+m_stHttpOption.bufContenu					= ""
+
+m_HttpClientReponse							= CHttpClient.Envoie(m_sUrl, m_stHttpOption)
+
+
+SI ErreurDétectée() _OU_ m_HttpClientReponse.CodeEtat <> 200 ALORS
+	RENVOYER  new CFireStoreReponse(m_HttpClientReponse, ErreurInfo(errMessage))
+FIN
+
+RENVOYER new CFireStoreReponse(m_HttpClientReponse)
+
+## Lister
+PROCÉDURE Lister(_sColName est une chaîne) : CFireStoreReponse
+
+# Url
+m_sUrl = ChaîneConstruit( CFireStore.CONST_FIRESTORE_BASE_URL , sPojetID)+[":runQuery"]
+
+// Select
+Selectionner("usrid")
+Selectionner("Email")
+Selectionner("prds")
+
+# Where
+Filtrer("usrid",DIFFERENT,0)
+Filtrer("usrid",SUPERIEUR_OU_EGAL,0)
+
+# Order By
+TrierPar("usrid",Décroissant)
+//TrierPar("__name__",Croissant)
+
+# Limit
+Limiter(1)
+
+m_stHttpOption.eMethode						= eHTTPPost
+m_stHttpOption.taEntête["Authorization"]	= "Bearer "+CAuth.ExposeToken
+m_stHttpOption.bufContenu					= _ConstruireRequete(_sColName)
+
+m_HttpClientReponse							= CHttpClient.Envoie(m_sUrl, m_stHttpOption)
+
+SI ErreurDétectée() _OU_ m_HttpClientReponse.CodeEtat <> 200 ALORS
+	RENVOYER  new CFireStoreReponse(m_HttpClientReponse, ErreurInfo(errMessage))
+FIN
+
+RENVOYER new CFireStoreReponse(m_HttpClientReponse)
+
+## _GénèreDocumentFirestore
+PROCÉDURE PRIVÉ _GénèreDocumentFirestore(LOCAL vNoeudRacine est MembreVariant, LOCAL sNomNoeudEnfant est chaîne = "")
+
+jPay est un JSON = VariantVersJSON(vNoeudRacine)
+
+SELON jPay..Type
+
+	CAS wlVariantObjet
+
+		POUR TOUT vNoeudEnfant DE jPay..Membre
+
+			SI vNoeudEnfant..Type <> 0 ALORS
+				_GénèreDocumentFirestore(vNoeudEnfant, sNomNoeudEnfant = "" ? vNoeudEnfant..Nom SINON "[%sNomNoeudEnfant%].[%EnumObjet..Valeur%].[%CONST_FIELDS%].[%vNoeudEnfant..Nom%]")
+			FIN
+		FIN
+
+	CAS wlVariantTableau
+
+		vElément est un MembreVariant
+		POUR TOUT vElémentTableau, nIndice de jPay..Valeur
+
+			vElément = vElémentTableau
+
+			SI vElément <> Null _OU_ vElément..Type <> 0 ALORS
+				_GénèreDocumentFirestore(vElément, sNomNoeudEnfant + ".[%EnumTableau..Valeur%].[%CONST_VALUES%][[%nIndice%]]")
+			FIN
+
+		FIN
+
+	AUTRE CAS
+
+		{"jsonDonneesConstruites.[%CONST_FIELDS%].[%sNomNoeudEnfant%].[%_ObtenirValeurEnum(vNoeudRacine..Type)%]",indVariable} = vNoeudRacine..Valeur
+
+FIN
+
+	PROCÉDURE INTERNE _ObtenirValeurEnum(LOCAL nTypeDefinition est un entier):chaîne
+
+		sValeurEnum est une chaîne
+
+		SELON nTypeDefinition
+			CAS wlBooléen
+				sValeurEnum = EnumBoolean..Valeur
+			CAS wlChaîne, wlChaîneAnsi, wlChaîneUnicode
+				sValeurEnum = EnumChaine..Valeur
+			CAS wlEntier
+				sValeurEnum = EnumEntier..Valeur
+			CAS wlRéel
+				sValeurEnum = EnumReel..Valeur
+			CAS wlTableau
+				sValeurEnum = EnumTableau..Valeur
+
+		FIN
+
+		RENVOYER sValeurEnum
+	FIN
+
+
+RENVOYER jsonDonneesConstruites
+
